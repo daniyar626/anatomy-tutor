@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="kk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Anatomy Tutor — 3D атлас</title>
+<meta name="description" content="Жүрек, өкпе, бүйрек және мидың интерактивті 3D атласы: құрылымдардың қазақша, орысша және латынша атаулары.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@1,500;1,600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<header class="top">
+  <div class="brand">
+    <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><path d="M16 27C9 21.5 4.5 17.4 4.5 12.2 4.5 8.6 7.3 6 10.6 6c2.1 0 4.1 1 5.4 2.8C17.3 7 19.3 6 21.4 6c3.3 0 6.1 2.6 6.1 6.2 0 5.2-4.5 9.3-11.5 14.8Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M3 16h6l2-4 3.5 8 3-6 1.5 2h10" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <div>
+      <div class="brand-name">AI Anatomy Tutor</div>
+      <div class="brand-sub" data-i18n="brandSub"></div>
+    </div>
+  </div>
+  <nav class="tabs" aria-label="Sections">
+    <button class="tab is-on" data-tab="atlas" data-i18n="tabAtlas"></button>
+    <button class="tab" data-tab="ai" data-i18n="tabAi"></button>
+    <button class="tab" data-tab="terms" data-i18n="tabTerms"></button>
+  </nav>
+  <div class="top-right">
+    <div class="lang" role="group" aria-label="Language">
+      <button data-lang="kk">ҚАЗ</button><button data-lang="ru">РУС</button>
+    </div>
+    <button class="score" id="btnProfile" type="button">
+      <span class="score-name" id="navName"></span>
+      <span class="score-val"><b id="navScore">0</b> <span data-i18n="score"></span></span>
+    </button>
+  </div>
+</header>
+
+<main>
+  <!-- 3D атлас -->
+  <section id="secAtlas" class="sec">
+    <div class="organ-tabs" id="organTabs"></div>
+    <div class="atlas">
+      <div class="stage-wrap">
+        <div class="stage" id="stage">
+          <div class="stage-top" id="viewChips"></div>
+          <div class="quiz-bar" id="quizBar" hidden>
+            <div class="quiz-q"><span id="quizLabel"></span> <b id="quizName"></b> <i id="quizLatin"></i></div>
+            <div class="quiz-meta"><span id="quizMsg"></span><span id="quizProg"></span>
+              <button type="button" class="btn-ghost" id="quizAgain" hidden data-i18n="quizAgain"></button>
+              <button type="button" class="btn-ghost" id="quizExit" data-i18n="quizExit"></button></div>
+          </div>
+          <div class="stage-loading" id="stageLoading"><span class="spinner"></span><span data-i18n="loading"></span></div>
+          <div class="stage-tools">
+            <label class="tool-slider"><span data-i18n="opacity"></span><input type="range" id="opacity" min="0" max="92" value="0"></label>
+            <button type="button" class="tool" id="btnLabels" aria-pressed="true"><svg viewBox="0 0 20 20"><path d="M3 5h9M3 10h14M3 15h7" /></svg><span data-i18n="labels"></span></button>
+            <button type="button" class="tool" id="btnRotate" aria-pressed="false"><svg viewBox="0 0 20 20"><path d="M16.5 10a6.5 6.5 0 1 1-2-4.7M16.5 3v3.5H13"/></svg><span data-i18n="rotate"></span></button>
+            <button type="button" class="tool" id="btnReset"><svg viewBox="0 0 20 20"><path d="M4 8V4h4M16 12v4h-4M4 4l4.5 4.5M16 16l-4.5-4.5"/></svg><span data-i18n="reset"></span></button>
+            <button type="button" class="tool tool-accent" id="btnQuiz"><svg viewBox="0 0 20 20"><path d="M7.5 7.5a2.5 2.5 0 1 1 3.6 2.2c-.7.4-1.1.9-1.1 1.8M10 14.5v.3"/><circle cx="10" cy="10" r="7.5"/></svg><span data-i18n="quiz"></span></button>
+          </div>
+        </div>
+        <p class="hint"><span data-i18n="dragHint"></span></p>
+      </div>
+
+      <aside class="panel">
+        <div class="organ-head">
+          <div class="latin" id="organLatin"></div>
+          <h1 id="organName"></h1>
+          <p id="organIntro"></p>
+        </div>
+        <div class="info" id="info">
+          <p class="info-empty" id="infoEmpty" data-i18n="pickHint"></p>
+          <div class="info-body" id="infoBody" hidden>
+            <div class="info-row">
+              <span class="num" id="infoNum"></span>
+              <div class="info-titles">
+                <h2 id="infoName"></h2>
+                <div class="latin" id="infoLatin"></div>
+              </div>
+              <button type="button" class="icon-btn" id="infoSpeak" data-i18n-title="listen"><svg viewBox="0 0 20 20"><path d="M3.5 7.8v4.4h3L10.5 16V4L6.5 7.8h-3ZM13.5 7.2a4 4 0 0 1 0 5.6M15.6 5a7 7 0 0 1 0 10"/></svg></button>
+            </div>
+            <p id="infoDesc"></p>
+          </div>
+        </div>
+        <h3 class="panel-h" data-i18n="structures"></h3>
+        <ol class="struct-list" id="structList"></ol>
+      </aside>
+    </div>
+    <p class="credit" data-i18n="credit"></p>
+  </section>
+
+  <!-- AI талдау -->
+  <section id="secAi" class="sec narrow" hidden>
+    <div class="card">
+      <h1 class="h-page" data-i18n="aiTitle"></h1>
+      <p class="muted" data-i18n="aiSub"></p>
+      <label class="drop" id="aiDrop" for="aiFile">
+        <svg viewBox="0 0 24 24"><path d="M12 16V5m0 0-4 4m4-4 4 4M5 15v3a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3"/></svg>
+        <span data-i18n="aiDrop"></span>
+        <small data-i18n="aiFormats"></small>
+        <input type="file" id="aiFile" accept="image/jpeg,image/png,image/webp" hidden>
+      </label>
+      <div id="aiPreviewBox" hidden>
+        <img id="aiPreview" alt="">
+        <button type="button" class="btn" id="aiAnalyze" data-i18n="aiAnalyze"></button>
+      </div>
+      <p class="notice" id="aiNotice" hidden></p>
+    </div>
+    <div class="card" id="aiResult" hidden>
+      <h3 class="panel-h" data-i18n="aiResult"></h3>
+      <div class="info-row">
+        <div class="info-titles"><h2 id="aiName"></h2><div class="latin" id="aiLatin"></div></div>
+        <button type="button" class="icon-btn" id="aiSpeak"><svg viewBox="0 0 20 20"><path d="M3.5 7.8v4.4h3L10.5 16V4L6.5 7.8h-3ZM13.5 7.2a4 4 0 0 1 0 5.6M15.6 5a7 7 0 0 1 0 10"/></svg></button>
+      </div>
+      <p id="aiDesc"></p>
+      <button type="button" class="btn-ghost" id="aiOpen3d" hidden data-i18n="aiOpen3d"></button>
+      <h3 class="panel-h" data-i18n="aiQuiz"></h3>
+      <p class="q" id="aiQuestion"></p>
+      <div class="options" id="aiOptions"></div>
+      <p class="notice" id="aiQuizMsg" hidden></p>
+      <button type="button" class="btn" id="aiCheck" data-i18n="aiCheck"></button>
+    </div>
+  </section>
+
+  <!-- Терминология -->
+  <section id="secTerms" class="sec narrow" hidden>
+    <div class="terms-head">
+      <div><h1 class="h-page" data-i18n="termsTitle"></h1><p class="muted" data-i18n="termsSub"></p></div>
+      <input type="search" id="termSearch" data-i18n-ph="termsSearch" autocomplete="off">
+    </div>
+    <div id="termsBox"></div>
+    <p class="muted" id="termsEmpty" hidden data-i18n="termsEmpty"></p>
+  </section>
+</main>
+
+<footer class="foot"><span>© 2026 AI Anatomy Tutor</span><span data-i18n="footer"></span></footer>
+
+<dialog id="profile" class="modal">
+  <form method="dialog" id="profileForm">
+    <h2 data-i18n="pfTitle"></h2>
+    <label><span data-i18n="pfName"></span><input type="text" id="pfName" maxlength="60" autocomplete="off"></label>
+    <label><span data-i18n="pfGroup"></span><input type="text" id="pfGroup" maxlength="60" autocomplete="off"></label>
+    <label><span data-i18n="pfKey"></span><input type="password" id="pfKey" autocomplete="off"></label>
+    <p class="muted small"><span data-i18n="pfKeyNote"></span> <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" data-i18n="pfGetKey"></a></p>
+    <div class="modal-actions">
+      <button type="button" class="btn-ghost" id="pfReset" data-i18n="pfReset"></button>
+      <span class="grow"></span>
+      <button type="button" class="btn-ghost" id="pfClose" data-i18n="pfClose"></button>
+      <button type="submit" class="btn" data-i18n="pfSave"></button>
+    </div>
+  </form>
+</dialog>
+
+<script src="vendor/three.min.js"></script>
+<script src="js/content.js"></script>
+<script src="js/viewer.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
