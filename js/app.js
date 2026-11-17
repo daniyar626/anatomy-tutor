@@ -337,6 +337,109 @@
     $("aiCheck").disabled = true;
   });
 
+  /* ---------- голосовой помощник (распознавание речи браузера + Gemini + озвучивание) ---------- */
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const va = { rec: null, listening: false, busy: false, history: [], voiceOn: store.get("va_voice", "1") === "1" };
+  function vaStatus(text, cls) { const el = $("vaStatus"); el.hidden = !text; el.textContent = text || ""; el.className = "va-status" + (cls ? " " + cls : ""); }
+  function vaAdd(role, text) {
+    const el = document.createElement("div"); el.className = "va-msg va-" + role; el.textContent = text;
+    const log = $("vaLog"); log.appendChild(el); log.scrollTop = log.scrollHeight;
+  }
+  function vaStopSpeech() { if ("speechSynthesis" in window) window.speechSynthesis.cancel(); }
+  function vaVoice() {
+    const voices = window.speechSynthesis.getVoices();
+    const want = state.lang === "kk" ? ["kk", "ru"] : ["ru"];
+    for (const p of want) { const v = voices.find(x => x.lang.toLowerCase().startsWith(p)); if (v) return v; }
+    return null;
+  }
+  function vaSpeak(text) {
+    if (!va.voiceOn || !("speechSynthesis" in window)) return;
+    const synth = window.speechSynthesis; synth.cancel();
+    const v = vaVoice();
+    if (state.lang === "kk" && !(v && /^kk/i.test(v.lang))) vaStatus(S("vaNoKkVoice"));
+    const clean = text.replace(/[*_#`>]/g, "").replace(/\s+/g, " ").trim();
+    // по одному предложению: длинные реплики Chrome обрывает
+    (clean.match(/[^.!?…]+[.!?…]*/g) || [clean]).map(p => p.trim()).filter(Boolean).forEach(p => {
+      const u = new SpeechSynthesisUtterance(p);
+      if (v) { u.voice = v; u.lang = v.lang; } else u.lang = state.lang === "kk" ? "kk-KZ" : "ru-RU";
+      synth.speak(u);
+    });
+  }
+  function vaSystem() {
+    const o = state.organ, d = state.selected ? structDef(state.selected) : null;
+    return "Ты голосовой помощник-преподаватель анатомии для студентов медицинского университета. " +
+      "Отвечай на " + (state.lang === "kk" ? "казахском" : "русском") + " языке, кратко — 2–5 предложений, обычным разговорным текстом " +
+      "без markdown, списков и символов форматирования: ответ будет озвучен. Где уместно, называй латинский термин. " +
+      "Отвечай только на учебные вопросы по анатомии, физиологии и смежным медицинским дисциплинам; на остальное вежливо откажи одной фразой. " +
+      "Не ставь диагнозы и не назначай лечение. Если не уверен в факте — скажи об этом." +
+      (o ? " Сейчас студент смотрит в 3D-атласе орган: " + o.name.ru + " (" + o.latin + ")" +
+        (d ? ", выбрана структура: " + d.name.ru + " (" + d.latin + ")." : ".") + " Вопросы вроде «что это?» относятся к ним." : "");
+  }
+  async function vaAsk(q) {
+    q = String(q || "").trim(); if (!q || va.busy) return;
+    const key = store.get("key", "").trim();
+    if (key.length < 10) { vaStatus(S("aiNoKey"), "bad"); openProfile(); return; }
+    vaStopSpeech(); vaAdd("user", q); $("vaInput").value = "";
+    va.busy = true; $("vaMic").disabled = true; vaStatus(S("vaThinking"));
+    const turn = { role: "user", parts: [{ text: q }] };
+    try {
+      const res = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-goog-api-key": key },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: vaSystem() }] },
+          contents: va.history.concat(turn),
+          generationConfig: { temperature: 0.4, maxOutputTokens: 700, thinkingConfig: { thinkingBudget: 0 } },
+        }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((body.error && body.error.message) || ("HTTP " + res.status));
+      const parts = (((body.candidates || [])[0] || {}).content || {}).parts || [];
+      const ans = parts.map(p => p.text || "").join("").trim();
+      if (!ans) throw new Error(S("vaEmpty"));
+      va.history.push(turn, { role: "model", parts: [{ text: ans }] });
+      if (va.history.length > 12) va.history.splice(0, va.history.length - 12);
+      vaStatus(""); vaAdd("bot", ans); vaSpeak(ans);
+    } catch (e) {
+      vaStatus(S("aiError") + ": " + (e && e.message ? e.message : e), "bad");
+    } finally { va.busy = false; $("vaMic").disabled = !SR; }
+  }
+  function vaListen() {
+    if (!SR) return vaStatus(S("vaNoRec"), "bad");
+    if (va.listening) { va.rec.stop(); return; }
+    if (va.busy) return;
+    vaStopSpeech();
+    const rec = new SR(); va.rec = rec;
+    rec.lang = state.lang === "kk" ? "kk-KZ" : "ru-RU"; rec.interimResults = true; rec.maxAlternatives = 1;
+    let heard = "", err = "";
+    rec.onstart = () => { va.listening = true; $("vaMic").classList.add("is-live"); vaStatus(S("vaListening")); };
+    rec.onresult = e => { heard = ""; for (let i = 0; i < e.results.length; i++) heard += e.results[i][0].transcript; $("vaInput").value = heard; };
+    rec.onerror = e => { err = e.error || "error"; };
+    rec.onend = () => {
+      va.listening = false; $("vaMic").classList.remove("is-live");
+      if (err === "not-allowed" || err === "service-not-allowed") vaStatus(S("vaMicDenied"), "bad");
+      else if (err && err !== "no-speech" && err !== "aborted") vaStatus(S("vaMicErr") + " (" + err + ")", "bad");
+      else if (heard.trim()) vaAsk(heard);
+      else vaStatus(S("vaNoHeard"));
+    };
+    try { rec.start(); } catch (e) { vaStatus(S("vaMicErr"), "bad"); }
+  }
+  function vaToggle(open) {
+    $("va").hidden = !open; $("vaFab").setAttribute("aria-expanded", String(open));
+    if (open) { if (!SR) { $("vaMic").disabled = true; vaStatus(S("vaNoRec")); } $("vaInput").focus(); }
+    else { vaStopSpeech(); if (va.listening) va.rec.abort(); }
+  }
+  $("vaFab").addEventListener("click", () => vaToggle($("va").hidden));
+  $("vaClose").addEventListener("click", () => vaToggle(false));
+  $("vaMic").addEventListener("click", vaListen);
+  $("vaForm").addEventListener("submit", e => { e.preventDefault(); vaAsk($("vaInput").value); });
+  $("vaVoice").setAttribute("aria-pressed", String(va.voiceOn));
+  $("vaVoice").addEventListener("click", () => {
+    va.voiceOn = !va.voiceOn; store.set("va_voice", va.voiceOn ? "1" : "0");
+    $("vaVoice").setAttribute("aria-pressed", String(va.voiceOn)); if (!va.voiceOn) vaStopSpeech();
+  });
+  if ("speechSynthesis" in window) window.speechSynthesis.getVoices(); // прогрев списка голосов
+
   /* ---------- профиль ---------- */
   const dlg = $("profile");
   function openProfile() {
