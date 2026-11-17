@@ -252,6 +252,23 @@
   }
   $("termSearch").addEventListener("input", renderTerms);
 
+  /* ---------- Gemini (Interactions API, ключ пользователя) ---------- */
+  const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/interactions";
+  const GEMINI_MODEL = "gemini-3.8-flash", GEMINI_TTS = "gemini-3.8-flash-tts";
+  function geminiKey() { const k = store.get("key", "").trim(); return k.length >= 10 ? k : ""; }
+  async function gemini(body) {
+    const res = await fetch(GEMINI_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-goog-api-key": geminiKey() },
+      body: JSON.stringify(Object.assign({ store: false }, body)),
+    });
+    let data = await res.json().catch(() => ({})); if (Array.isArray(data)) data = data[0] || {};
+    if (!res.ok || data.error) throw new Error((data.error && data.error.message) || ("HTTP " + res.status));
+    const items = (data.steps || []).filter(s => s.type === "model_output").flatMap(s => s.content || []).concat(data.outputs || []);
+    return { text: items.filter(c => c.type === "text").map(c => c.text || "").join("").trim(), audio: items.filter(c => c.type === "audio" && c.data).pop() || null };
+  }
+  function parseJson(text) { return JSON.parse(String(text || "{}").replace(/^```(?:json)?|```$/g, "").trim() || "{}"); }
+
   /* ---------- AI-разбор изображения (Gemini, ключ пользователя) ---------- */
   const ai = { b64: null, mime: "", answer: null, organ: null, latin: "" };
   function aiNotice(el, text, cls) { el.hidden = !text; el.textContent = text || ""; el.className = "notice" + (cls ? " " + cls : ""); }
@@ -285,23 +302,17 @@
       "Все тексты (кроме latin) — на " + langName + " языке.";
   }
   async function aiAnalyze() {
-    const key = store.get("key", "").trim();
     if (!ai.b64) return aiNotice($("aiNotice"), S("aiNoImg"), "bad");
-    if (key.length < 10) { aiNotice($("aiNotice"), S("aiNoKey"), "bad"); openProfile(); return; }
+    if (!geminiKey()) { aiNotice($("aiNotice"), S("aiNoKey"), "bad"); openProfile(); return; }
     const btn = $("aiAnalyze"); btn.disabled = true; btn.textContent = S("aiBusy"); aiNotice($("aiNotice"), "");
     try {
-      const res = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-goog-api-key": key },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: aiPrompt() }, { inline_data: { mime_type: ai.mime, data: ai.b64 } }] }],
-          generationConfig: { responseMimeType: "application/json", temperature: 0.2 },
-        }),
+      const out = await gemini({
+        model: GEMINI_MODEL,
+        input: [{ type: "text", text: aiPrompt() }, { type: "image", data: ai.b64, mime_type: ai.mime }],
+        generation_config: { thinking_level: "low" },
+        response_format: { type: "text", mime_type: "application/json" },
       });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error((body.error && body.error.message) || ("HTTP " + res.status));
-      const text = (((body.candidates || [])[0] || {}).content || {}).parts;
-      const data = JSON.parse(String(text && text[0] && text[0].text || "{}").replace(/^```(?:json)?|```$/g, "").trim());
+      const data = parseJson(out.text);
       if (!data.isAnatomy || !Array.isArray(data.options) || data.options.length < 2) { $("aiResult").hidden = true; return aiNotice($("aiNotice"), S("aiNotAnatomy"), "bad"); }
       aiShow(data);
     } catch (e) {
@@ -337,108 +348,147 @@
     $("aiCheck").disabled = true;
   });
 
-  /* ---------- голосовой помощник (распознавание речи браузера + Gemini + озвучивание) ---------- */
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  const va = { rec: null, listening: false, busy: false, history: [], voiceOn: store.get("va_voice", "1") === "1" };
+  /* ---------- голосовой помощник: запись с микрофона → Gemini (расшифровка + ответ) → голос Gemini TTS ---------- */
+  const VA_SILENCE = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA=";
+  const va = { rec: null, listening: false, busy: false, spoke: false, history: [], audio: new Audio(), url: "", voiceOn: store.get("va_voice", "1") === "1" };
   function vaStatus(text, cls) { const el = $("vaStatus"); el.hidden = !text; el.textContent = text || ""; el.className = "va-status" + (cls ? " " + cls : ""); }
   function vaAdd(role, text) {
     const el = document.createElement("div"); el.className = "va-msg va-" + role; el.textContent = text;
     const log = $("vaLog"); log.appendChild(el); log.scrollTop = log.scrollHeight;
   }
-  function vaStopSpeech() { if ("speechSynthesis" in window) window.speechSynthesis.cancel(); }
-  function vaVoice() {
-    const voices = window.speechSynthesis.getVoices();
-    const want = state.lang === "kk" ? ["kk", "ru"] : ["ru"];
-    for (const p of want) { const v = voices.find(x => x.lang.toLowerCase().startsWith(p)); if (v) return v; }
-    return null;
+  function vaStopSpeech() {
+    va.audio.pause();
+    if ("speechSynthesis" in window) window.speechSynthesis.cancel();
   }
-  function vaSpeak(text) {
-    if (!va.voiceOn || !("speechSynthesis" in window)) return;
+  // Разблокировать воспроизведение, пока есть жест пользователя (нужно в Safari / iOS).
+  function vaUnlock() { try { va.audio.src = VA_SILENCE; const p = va.audio.play(); if (p && p.catch) p.catch(() => {}); } catch (e) { /* не критично */ } }
+  function vaSpeakBrowser(text) {
+    if (!("speechSynthesis" in window)) return;
     const synth = window.speechSynthesis; synth.cancel();
-    const v = vaVoice();
-    if (state.lang === "kk" && !(v && /^kk/i.test(v.lang))) vaStatus(S("vaNoKkVoice"));
-    const clean = text.replace(/[*_#`>]/g, "").replace(/\s+/g, " ").trim();
-    // по одному предложению: длинные реплики Chrome обрывает
-    (clean.match(/[^.!?…]+[.!?…]*/g) || [clean]).map(p => p.trim()).filter(Boolean).forEach(p => {
+    const voices = synth.getVoices(), isKk = /[әғқңөұүһі]/i.test(text);
+    const v = (isKk && voices.find(x => /^kk/i.test(x.lang))) || voices.find(x => /^ru/i.test(x.lang)) || null;
+    if (isKk && !(v && /^kk/i.test(v.lang))) vaStatus(S("vaNoKkVoice"));
+    (text.match(/[^.!?…]+[.!?…]*/g) || [text]).map(p => p.trim()).filter(Boolean).forEach(p => {
       const u = new SpeechSynthesisUtterance(p);
-      if (v) { u.voice = v; u.lang = v.lang; } else u.lang = state.lang === "kk" ? "kk-KZ" : "ru-RU";
+      if (v) { u.voice = v; u.lang = v.lang; } else u.lang = isKk ? "kk-KZ" : "ru-RU";
       synth.speak(u);
     });
   }
+  async function vaSpeak(text) {
+    if (!va.voiceOn) return;
+    const clean = text.replace(/[*_#`>]/g, "").replace(/\s+/g, " ").trim();
+    if (!clean) return;
+    vaStatus(S("vaVoicing"));
+    try {
+      const out = await gemini({
+        model: GEMINI_TTS,
+        input: [{ type: "user_input", content: [{ type: "text", text: clean, annotations: [{ type: "speech_metadata", style: "warm, friendly and calm, like a kind teacher explaining to a student" }] }] }],
+        response_format: { type: "audio" },
+        generation_config: { speech_config: [{ voice: "Sulafat" }] },
+      });
+      if (!out.audio) throw new Error("no audio");
+      if (!va.voiceOn || va.busy || va.listening || $("va").hidden) return vaStatus("");
+      const bin = atob(out.audio.data), bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      if (va.url) URL.revokeObjectURL(va.url);
+      va.url = URL.createObjectURL(new Blob([bytes], { type: out.audio.mime_type || "audio/wav" }));
+      va.audio.src = va.url; vaStatus("");
+      await va.audio.play();
+    } catch (e) { vaStatus(""); vaSpeakBrowser(clean); }   // запасной вариант — голос браузера
+  }
   function vaSystem() {
     const o = state.organ, d = state.selected ? structDef(state.selected) : null;
-    return "Ты голосовой помощник-преподаватель анатомии для студентов медицинского университета. " +
-      "Отвечай на " + (state.lang === "kk" ? "казахском" : "русском") + " языке, кратко — 2–5 предложений, обычным разговорным текстом " +
-      "без markdown, списков и символов форматирования: ответ будет озвучен. Где уместно, называй латинский термин. " +
-      "Отвечай только на учебные вопросы по анатомии, физиологии и смежным медицинским дисциплинам; на остальное вежливо откажи одной фразой. " +
-      "Не ставь диагнозы и не назначай лечение. Если не уверен в факте — скажи об этом." +
+    return "Ты голосовой помощник-преподаватель анатомии для студентов медицинского университета в Казахстане. " +
+      "Студент спрашивает на казахском или русском языке. Отвечай на том языке, на котором задан вопрос; если язык неясен — на " +
+      (state.lang === "kk" ? "казахском" : "русском") + ". Казахский — грамотный литературный, с принятой казахской анатомической терминологией. " +
+      "Ответ краткий, 2–5 предложений, обычным разговорным текстом без markdown, списков и символов форматирования: он будет озвучен. " +
+      "Где уместно, называй латинский термин. Отвечай только на учебные вопросы по анатомии, физиологии и смежным медицинским дисциплинам; " +
+      "на остальное вежливо откажи одной фразой. Не ставь диагнозы и не назначай лечение. Если не уверен в факте — скажи об этом. " +
+      "Верни JSON с полями: heard — дословная запись вопроса студента на языке, на котором он задан (если в аудио нет разборчивой речи — пустая строка); answer — твой ответ." +
       (o ? " Сейчас студент смотрит в 3D-атласе орган: " + o.name.ru + " (" + o.latin + ")" +
         (d ? ", выбрана структура: " + d.name.ru + " (" + d.latin + ")." : ".") + " Вопросы вроде «что это?» относятся к ним." : "");
   }
-  async function vaAsk(q) {
-    q = String(q || "").trim(); if (!q || va.busy) return;
-    const key = store.get("key", "").trim();
-    if (key.length < 10) { vaStatus(S("aiNoKey"), "bad"); openProfile(); return; }
-    vaStopSpeech(); vaAdd("user", q); $("vaInput").value = "";
+  async function vaAsk(q, audio) {
+    q = String(q || "").trim(); if ((!q && !audio) || va.busy) return;
+    if (!geminiKey()) { vaStatus(S("aiNoKey"), "bad"); openProfile(); return; }
+    vaStopSpeech(); if (q) { vaAdd("user", q); $("vaInput").value = ""; }
     va.busy = true; $("vaMic").disabled = true; vaStatus(S("vaThinking"));
-    const turn = { role: "user", parts: [{ text: q }] };
+    const past = va.history.map(h => "Студент: " + h.q + "\nПомощник: " + h.a).join("\n");
+    const input = [{ type: "text", text: (past ? "Предыдущий диалог:\n" + past + "\n\n" : "") + (audio ? "Новый вопрос студента — в аудиозаписи." : "Новый вопрос студента: " + q) }];
+    if (audio) input.push({ type: "audio", data: audio.data, mime_type: audio.mime });
+    let ans = "";
     try {
-      const res = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-goog-api-key": key },
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: vaSystem() }] },
-          contents: va.history.concat(turn),
-          generationConfig: { temperature: 0.4, maxOutputTokens: 700, thinkingConfig: { thinkingBudget: 0 } },
-        }),
+      const out = await gemini({
+        model: GEMINI_MODEL, system_instruction: vaSystem(), input,
+        generation_config: { thinking_level: "low", max_output_tokens: 2000 },
+        response_format: { type: "text", mime_type: "application/json", schema: { type: "object", properties: { heard: { type: "string" }, answer: { type: "string" } }, required: ["heard", "answer"] } },
       });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error((body.error && body.error.message) || ("HTTP " + res.status));
-      const parts = (((body.candidates || [])[0] || {}).content || {}).parts || [];
-      const ans = parts.map(p => p.text || "").join("").trim();
+      const data = parseJson(out.text);
+      const heard = String(data.heard || "").trim(); ans = String(data.answer || "").trim();
+      if (audio) { if (!heard) { vaStatus(S("vaNoHeard")); return; } vaAdd("user", heard); }
       if (!ans) throw new Error(S("vaEmpty"));
-      va.history.push(turn, { role: "model", parts: [{ text: ans }] });
-      if (va.history.length > 12) va.history.splice(0, va.history.length - 12);
-      vaStatus(""); vaAdd("bot", ans); vaSpeak(ans);
+      va.history.push({ q: q || heard, a: ans }); if (va.history.length > 6) va.history.shift();
+      vaStatus(""); vaAdd("bot", ans);
     } catch (e) {
-      vaStatus(S("aiError") + ": " + (e && e.message ? e.message : e), "bad");
-    } finally { va.busy = false; $("vaMic").disabled = !SR; }
+      vaStatus(S("aiError") + ": " + (e && e.message ? e.message : e), "bad"); return;
+    } finally { va.busy = false; $("vaMic").disabled = false; }
+    vaSpeak(ans);
   }
-  function vaListen() {
-    if (!SR) return vaStatus(S("vaNoRec"), "bad");
-    if (va.listening) { va.rec.stop(); return; }
+  function vaStopRec() { if (va.rec && va.rec.state !== "inactive") va.rec.stop(); }
+  async function vaListen() {
+    if (va.listening) return vaStopRec();
     if (va.busy) return;
-    vaStopSpeech();
-    const rec = new SR(); va.rec = rec;
-    rec.lang = state.lang === "kk" ? "kk-KZ" : "ru-RU"; rec.interimResults = true; rec.maxAlternatives = 1;
-    let heard = "", err = "";
-    rec.onstart = () => { va.listening = true; $("vaMic").classList.add("is-live"); vaStatus(S("vaListening")); };
-    rec.onresult = e => { heard = ""; for (let i = 0; i < e.results.length; i++) heard += e.results[i][0].transcript; $("vaInput").value = heard; };
-    rec.onerror = e => { err = e.error || "error"; };
-    rec.onend = () => {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.MediaRecorder) return vaStatus(S("vaNoRec"), "bad");
+    if (!geminiKey()) { vaStatus(S("aiNoKey"), "bad"); openProfile(); return; }
+    vaStopSpeech(); vaUnlock();
+    let stream;
+    try { stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } }); }
+    catch (e) { return vaStatus(S("vaMicDenied"), "bad"); }
+    const rec = new MediaRecorder(stream), chunks = []; va.rec = rec; va.spoke = false; va.cancelled = false;
+    let timer = 0, ctx = null;
+    rec.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
+    rec.onstop = () => {
+      clearInterval(timer); if (ctx) ctx.close().catch(() => {});
+      stream.getTracks().forEach(t => t.stop());
       va.listening = false; $("vaMic").classList.remove("is-live");
-      if (err === "not-allowed" || err === "service-not-allowed") vaStatus(S("vaMicDenied"), "bad");
-      else if (err && err !== "no-speech" && err !== "aborted") vaStatus(S("vaMicErr") + " (" + err + ")", "bad");
-      else if (heard.trim()) vaAsk(heard);
-      else vaStatus(S("vaNoHeard"));
+      if (va.cancelled) return vaStatus("");
+      const blob = new Blob(chunks, { type: rec.mimeType || "audio/webm" });
+      if (!va.spoke || blob.size < 1500) return vaStatus(S("vaNoHeard"));
+      const mime = /mp4|m4a|aac/i.test(blob.type) ? "audio/m4a" : /ogg/i.test(blob.type) ? "audio/ogg" : "audio/webm";
+      const fr = new FileReader();
+      fr.onload = () => vaAsk("", { data: String(fr.result).split(",")[1] || "", mime });
+      fr.readAsDataURL(blob);
     };
-    try { rec.start(); } catch (e) { vaStatus(S("vaMicErr"), "bad"); }
+    // автоостановка: 1,8 с тишины после речи, 8 с без речи вообще или 45 с записи
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (AC) {
+      ctx = new AC(); const an = ctx.createAnalyser(); an.fftSize = 1024; ctx.createMediaStreamSource(stream).connect(an);
+      const buf = new Uint8Array(an.fftSize), t0 = performance.now(); let last = t0;
+      timer = setInterval(() => {
+        an.getByteTimeDomainData(buf);
+        let s = 0; for (let i = 0; i < buf.length; i++) { const x = (buf[i] - 128) / 128; s += x * x; }
+        const now = performance.now();
+        if (Math.sqrt(s / buf.length) > 0.03) { va.spoke = true; last = now; }
+        if ((va.spoke && now - last > 1800) || (!va.spoke && now - t0 > 8000) || now - t0 > 45000) vaStopRec();
+      }, 100);
+    } else va.spoke = true;
+    rec.start(); va.listening = true; $("vaMic").classList.add("is-live"); vaStatus(S("vaListening"));
   }
   function vaToggle(open) {
     $("va").hidden = !open; $("vaFab").setAttribute("aria-expanded", String(open));
-    if (open) { if (!SR) { $("vaMic").disabled = true; vaStatus(S("vaNoRec")); } $("vaInput").focus(); }
-    else { vaStopSpeech(); if (va.listening) va.rec.abort(); }
+    if (open) $("vaInput").focus();
+    else { vaStopSpeech(); if (va.listening) { va.cancelled = true; vaStopRec(); } }
   }
   $("vaFab").addEventListener("click", () => vaToggle($("va").hidden));
   $("vaClose").addEventListener("click", () => vaToggle(false));
   $("vaMic").addEventListener("click", vaListen);
-  $("vaForm").addEventListener("submit", e => { e.preventDefault(); vaAsk($("vaInput").value); });
+  $("vaForm").addEventListener("submit", e => { e.preventDefault(); if ($("vaInput").value.trim()) vaUnlock(); vaAsk($("vaInput").value); });
   $("vaVoice").setAttribute("aria-pressed", String(va.voiceOn));
   $("vaVoice").addEventListener("click", () => {
     va.voiceOn = !va.voiceOn; store.set("va_voice", va.voiceOn ? "1" : "0");
     $("vaVoice").setAttribute("aria-pressed", String(va.voiceOn)); if (!va.voiceOn) vaStopSpeech();
   });
-  if ("speechSynthesis" in window) window.speechSynthesis.getVoices(); // прогрев списка голосов
+  if ("speechSynthesis" in window) window.speechSynthesis.getVoices(); // прогрев списка голосов для запасного варианта
 
   /* ---------- профиль ---------- */
   const dlg = $("profile");
