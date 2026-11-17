@@ -262,12 +262,21 @@
     const models = [body.model].concat(GEMINI_FALLBACK[body.model] || []);
     let lastErr = null;
     for (const model of models) {
-      const res = await fetch(GEMINI_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-goog-api-key": geminiKey() },
-        body: JSON.stringify(Object.assign({ store: false }, body, { model })),
-      });
-      let data = await res.json().catch(() => ({})); if (Array.isArray(data)) data = data[0] || {};
+      // зависший запрос обрываем через 25 с и пробуем следующую модель
+      const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 25000);
+      let res, data;
+      try {
+        res = await fetch(GEMINI_URL, {
+          method: "POST", signal: ctl.signal,
+          headers: { "Content-Type": "application/json", "x-goog-api-key": geminiKey() },
+          body: JSON.stringify(Object.assign({ store: false }, body, { model })),
+        });
+        data = await res.json().catch(() => ({}));
+      } catch (e) {
+        lastErr = new Error(e && e.name === "AbortError" ? S("aiTimeout") : (e && e.message) || String(e));
+        continue;
+      } finally { clearTimeout(timer); }
+      if (Array.isArray(data)) data = data[0] || {};
       if (!res.ok || data.error) {
         lastErr = new Error((data.error && data.error.message) || ("HTTP " + res.status));
         if ([429, 500, 503].includes(res.status)) continue;
