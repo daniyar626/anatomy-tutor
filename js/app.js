@@ -256,16 +256,27 @@
   const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/interactions";
   const GEMINI_MODEL = "gemini-3.8-flash", GEMINI_TTS = "gemini-3.8-flash-tts";
   function geminiKey() { const k = store.get("key", "").trim(); return k.length >= 10 ? k : ""; }
+  // При перегрузке модели (503/429/500) запрос повторяется на запасной модели.
+  const GEMINI_FALLBACK = { "gemini-3.8-flash": ["gemini-3.6-flash", "gemini-3.5-flash-lite"], "gemini-3.8-flash-tts": ["gemini-3.8-flash-lite-tts"] };
   async function gemini(body) {
-    const res = await fetch(GEMINI_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-goog-api-key": geminiKey() },
-      body: JSON.stringify(Object.assign({ store: false }, body)),
-    });
-    let data = await res.json().catch(() => ({})); if (Array.isArray(data)) data = data[0] || {};
-    if (!res.ok || data.error) throw new Error((data.error && data.error.message) || ("HTTP " + res.status));
-    const items = (data.steps || []).filter(s => s.type === "model_output").flatMap(s => s.content || []).concat(data.outputs || []);
-    return { text: items.filter(c => c.type === "text").map(c => c.text || "").join("").trim(), audio: items.filter(c => c.type === "audio" && c.data).pop() || null };
+    const models = [body.model].concat(GEMINI_FALLBACK[body.model] || []);
+    let lastErr = null;
+    for (const model of models) {
+      const res = await fetch(GEMINI_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-goog-api-key": geminiKey() },
+        body: JSON.stringify(Object.assign({ store: false }, body, { model })),
+      });
+      let data = await res.json().catch(() => ({})); if (Array.isArray(data)) data = data[0] || {};
+      if (!res.ok || data.error) {
+        lastErr = new Error((data.error && data.error.message) || ("HTTP " + res.status));
+        if ([429, 500, 503].includes(res.status)) continue;
+        throw lastErr;
+      }
+      const items = (data.steps || []).filter(s => s.type === "model_output").flatMap(s => s.content || []).concat(data.outputs || []);
+      return { text: items.filter(c => c.type === "text").map(c => c.text || "").join("").trim(), audio: items.filter(c => c.type === "audio" && c.data).pop() || null };
+    }
+    throw lastErr;
   }
   function parseJson(text) { return JSON.parse(String(text || "{}").replace(/^```(?:json)?|```$/g, "").trim() || "{}"); }
 
