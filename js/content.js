@@ -292,18 +292,18 @@
   const RAK_KIND = { kk: "Оқулық, 2-басылым", ru: "Учебник, 2-е издание" };
   const ATL_KIND = { kk: "Атлас латын, қазақ және орыс тілдерінде", ru: "Атлас на латинском, казахском и русском языках" };
   window.BOOKS = [
-    { author: "Рақышев А. Р.", title: "Адам анатомиясы", kind: RAK_KIND, vol: { kk: "I кітап", ru: "Книга I" }, pub: "Алматы, 2004", pages: 212, files: [{ href: "books/rakyshev-anatomiya-1.pdf", label: "33 МБ" }] },
-    { author: "Рақышев А. Р.", title: "Адам анатомиясы", kind: RAK_KIND, vol: { kk: "II кітап", ru: "Книга II" }, pub: "Алматы, 2004", pages: 219, files: [{ href: "books/rakyshev-anatomiya-2.pdf", label: "33 МБ" }] },
+    { author: "Рақышев А. Р.", title: "Адам анатомиясы", kind: RAK_KIND, vol: { kk: "I кітап", ru: "Книга I" }, pub: "Алматы, 2004", pages: 212, files: [{ href: "https://daniyar626.github.io/anatomy-tutor/books/rakyshev-anatomiya-1.pdf", label: "33 МБ" }] },
+    { author: "Рақышев А. Р.", title: "Адам анатомиясы", kind: RAK_KIND, vol: { kk: "II кітап", ru: "Книга II" }, pub: "Алматы, 2004", pages: 219, files: [{ href: "https://daniyar626.github.io/anatomy-tutor/books/rakyshev-anatomiya-2.pdf", label: "33 МБ" }] },
     { author: KOL_AUTHOR, title: KOL_TITLE, kind: KOL_KIND, vol: { kk: "1-том. Тірек-қимыл аппараты", ru: "Том 1. Опорно-двигательный аппарат" },
-      pub: "Мәскеу: ГЭОТАР-Медиа, 2015", pages: 414, files: [{ href: "books/kolesnikov-tom-1-part1.pdf", label: "1–207 · 86 МБ" }, { href: "books/kolesnikov-tom-1-part2.pdf", label: "208–414 · 86 МБ" }] },
+      pub: "Мәскеу: ГЭОТАР-Медиа, 2015", pages: 414, files: [{ href: "https://daniyar626.github.io/anatomy-tutor/books/kolesnikov-tom-1-part1.pdf", label: "1–207 · 86 МБ" }, { href: "https://daniyar626.github.io/anatomy-tutor/books/kolesnikov-tom-1-part2.pdf", label: "208–414 · 86 МБ" }] },
     { author: KOL_AUTHOR, title: KOL_TITLE, kind: KOL_KIND, vol: { kk: "2-том. Спланхнология және жүрек-тамыр жүйесі", ru: "Том 2. Спланхнология и сердечно-сосудистая система" },
-      pub: "Мәскеу: ГЭОТАР-Медиа, 2016", pages: 483, organs: ["heart", "lungs", "kidneys"], files: [{ href: "books/kolesnikov-tom-2-part1.pdf", label: "1–161 · 60 МБ" }, { href: "books/kolesnikov-tom-2-part2.pdf", label: "162–322 · 60 МБ" }, { href: "books/kolesnikov-tom-2-part3.pdf", label: "323–483 · 60 МБ" }] },
+      pub: "Мәскеу: ГЭОТАР-Медиа, 2016", pages: 483, organs: ["heart", "lungs", "kidneys"], files: [{ href: "https://daniyar626.github.io/anatomy-tutor/books/kolesnikov-tom-2-part1.pdf", label: "1–161 · 60 МБ" }, { href: "https://daniyar626.github.io/anatomy-tutor/books/kolesnikov-tom-2-part2.pdf", label: "162–322 · 60 МБ" }, { href: "https://daniyar626.github.io/anatomy-tutor/books/kolesnikov-tom-2-part3.pdf", label: "323–483 · 60 МБ" }] },
     { author: KOL_AUTHOR, title: KOL_TITLE, kind: KOL_KIND, vol: { kk: "3-том. Жүйке жүйесі. Сезім мүшелері", ru: "Том 3. Нервная система. Органы чувств" },
-      pub: "Мәскеу: ГЭОТАР-Медиа, 2017", pages: 329, organs: ["brain"], files: [{ href: "books/kolesnikov-tom-3-part1.pdf", label: "1–164 · 56 МБ" }, { href: "books/kolesnikov-tom-3-part2.pdf", label: "165–329 · 62 МБ" }] },
+      pub: "Мәскеу: ГЭОТАР-Медиа, 2017", pages: 329, organs: ["brain"], files: [{ href: "https://daniyar626.github.io/anatomy-tutor/books/kolesnikov-tom-3-part1.pdf", label: "1–164 · 56 МБ" }, { href: "https://daniyar626.github.io/anatomy-tutor/books/kolesnikov-tom-3-part2.pdf", label: "165–329 · 62 МБ" }] },
     { author: "Рақышев А. Р.", title: "Адам анатомиясының атласы", kind: ATL_KIND, vol: { kk: "I том. Тірек және қимыл мүшелері", ru: "Том I. Органы опоры и движения" },
-      pub: "Алматы: «Кітап», 2006", pages: 159, files: [{ href: "books/rakyshev-atlas-1.pdf", label: "18 МБ" }] },
+      pub: "Алматы: «Кітап», 2006", pages: 159, files: [{ href: "https://daniyar626.github.io/anatomy-tutor/books/rakyshev-atlas-1.pdf", label: "18 МБ" }] },
     { author: "Рақышев А. Р.", title: "Адам анатомиясының атласы", kind: ATL_KIND, vol: { kk: "IV том. Жүйкелік жүйе", ru: "Том IV. Нервная система" },
-      pub: "Алматы: «Кітап», 2006", pages: 299, organs: ["brain"], files: [{ href: "books/rakyshev-atlas-4.pdf", label: "49 МБ" }] },
+      pub: "Алматы: «Кітап», 2006", pages: 299, organs: ["brain"], files: [{ href: "https://daniyar626.github.io/anatomy-tutor/books/rakyshev-atlas-4.pdf", label: "49 МБ" }] },
   ];
 
   window.I18N = {
