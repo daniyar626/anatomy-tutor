@@ -26,7 +26,7 @@
   }
   function setLang(l) {
     state.lang = l; store.set("lang", l);
-    applyI18n(); renderOrganTabs(); renderOrganHead(); renderChips(); renderList(); renderInfo(); renderTerms(); renderQuiz();
+    applyI18n(); renderOrganTabs(); renderOrganHead(); renderChips(); renderList(); renderInfo(); renderTerms(); renderBooks(); renderQuiz();
     viewer.refreshLabelText();
   }
   function addScore(n) { state.score += n; store.set("score", String(state.score)); $("navScore").textContent = state.score; }
@@ -44,7 +44,7 @@
   }
 
   /* ---------- вкладки ---------- */
-  const secs = { atlas: $("secAtlas"), ai: $("secAi"), terms: $("secTerms") };
+  const secs = { atlas: $("secAtlas"), ai: $("secAi"), terms: $("secTerms"), books: $("secBooks") };
   function switchTab(tab) {
     Object.entries(secs).forEach(([k, el]) => { el.hidden = k !== tab; });
     document.querySelectorAll(".tab").forEach(b => b.classList.toggle("is-on", b.dataset.tab === tab));
@@ -251,6 +251,37 @@
     $("termsEmpty").hidden = total > 0;
   }
   $("termSearch").addEventListener("input", renderTerms);
+
+  /* ---------- кітаптар ---------- */
+  function renderBooks() {
+    const box = $("booksBox"); box.textContent = "";
+    const T = v => (typeof v === "string" ? v : L(v));
+    (window.BOOKS || []).forEach(b => {
+      const card = document.createElement("article"); card.className = "book";
+      const add = (tag, cls, text) => { const el = document.createElement(tag); el.className = cls; el.textContent = text; card.appendChild(el); return el; };
+      add("div", "book-author", T(b.author));
+      add("h3", "book-title", b.title);
+      add("div", "book-vol", T(b.vol));
+      add("div", "book-meta", T(b.kind) + " · " + b.pub + " · " + b.pages + " " + S("booksPages"));
+      if (b.organs && b.organs.length) {
+        const row = add("div", "book-links", S("booksSee") + " ");
+        b.organs.forEach(id => {
+          const o = ORGANS.find(x => x.id === id); if (!o) return;
+          const btn = document.createElement("button"); btn.type = "button"; btn.className = "btn-ghost"; btn.textContent = L(o.name);
+          btn.addEventListener("click", () => { switchTab("atlas"); loadOrgan(id); });
+          row.appendChild(btn);
+        });
+      }
+      if (b.files && b.files.length) {
+        const row = add("div", "book-links", "");
+        b.files.forEach(f => {
+          const a = document.createElement("a"); a.className = "btn-ghost"; a.href = f.href; a.target = "_blank"; a.rel = "noopener";
+          a.textContent = S("booksOpen") + (f.label ? " — " + f.label : ""); row.appendChild(a);
+        });
+      }
+      box.appendChild(card);
+    });
+  }
 
   /* ---------- Gemini (Interactions API, ключ пользователя) ---------- */
   const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/interactions";
@@ -526,6 +557,6 @@
 
   /* ---------- запуск ---------- */
   $("navScore").textContent = state.score;
-  applyI18n(); renderTerms();
+  applyI18n(); renderTerms(); renderBooks();
   loadOrgan(store.get("organ", "heart"));
 })();

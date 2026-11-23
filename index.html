@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@1,500;1,600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=5">
+<link rel="stylesheet" href="css/style.css?v=6">
 </head>
 <body>
 
@@ -24,6 +24,7 @@
     <button class="tab is-on" data-tab="atlas" data-i18n="tabAtlas"></button>
     <button class="tab" data-tab="ai" data-i18n="tabAi"></button>
     <button class="tab" data-tab="terms" data-i18n="tabTerms"></button>
+    <button class="tab" data-tab="books" data-i18n="tabBooks"></button>
   </nav>
   <div class="top-right">
     <div class="lang" role="group" aria-label="Language">
@@ -131,6 +132,12 @@
     <div id="termsBox"></div>
     <p class="muted" id="termsEmpty" hidden data-i18n="termsEmpty"></p>
   </section>
+  <!-- Кітаптар -->
+  <section id="secBooks" class="sec narrow" hidden>
+    <h1 class="h-page" data-i18n="booksTitle"></h1>
+    <p class="muted" data-i18n="booksSub"></p>
+    <div id="booksBox"></div>
+  </section>
 </main>
 
 <footer class="foot"><span>© 2026 AI Anatomy Tutor</span><span data-i18n="footer"></span></footer>
@@ -169,8 +176,8 @@
 </dialog>
 
 <script src="vendor/three.min.js"></script>
-<script src="js/content.js?v=5"></script>
-<script src="js/viewer.js?v=5"></script>
-<script src="js/app.js?v=5"></script>
+<script src="js/content.js?v=6"></script>
+<script src="js/viewer.js?v=6"></script>
+<script src="js/app.js?v=6"></script>
 </body>
 </html>

@@ -225,6 +225,16 @@ input:focus { outline: none; border-color: var(--accent); }
 .modal-actions .btn { height: 36px; }
 .grow { flex: 1; }
 
+/* ---------- кітаптар ---------- */
+#booksBox { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; margin-top: 18px; }
+.book { padding: 16px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); display: flex; flex-direction: column; gap: 4px; }
+.book-author { font-size: 13px; color: var(--muted); }
+.book-title { font-family: var(--serif); font-style: italic; font-size: 21px; font-weight: 600; color: var(--accent); line-height: 1.2; }
+.book-vol { font-weight: 600; }
+.book-meta { font-size: 13px; color: var(--muted); line-height: 1.45; margin-top: 4px; }
+.book-links { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 10px; font-size: 13px; color: var(--muted); }
+.book-links a.btn-ghost { display: inline-flex; align-items: center; text-decoration: none; }
+
 /* ---------- голосовой помощник ---------- */
 .va-fab { position: fixed; right: 20px; bottom: 20px; z-index: 40; width: 56px; height: 56px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; box-shadow: 0 8px 24px rgba(0, 0, 0, .45); }
 .va-fab:hover { filter: brightness(1.08); }
